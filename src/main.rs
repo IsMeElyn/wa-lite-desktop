@@ -69,6 +69,26 @@ const OFFLINE_BANNER_JS: &str = r#"
 enum UserEvent {
     Online,
     Offline,
+    /// Dibuka saat offline: periksa apakah WhatsApp berhasil dimuat dari cache.
+    CheckCache,
+    /// Cache tidak cukup: tampilkan halaman offline.
+    ShowOfflinePage,
+}
+
+/// Cek di dalam halaman: WhatsApp Web berhasil tampil jika elemen #app ada.
+const CACHE_CHECK_JS: &str =
+    "(function(){return (location.hostname==='web.whatsapp.com'&&document.getElementById('app'))?'ok':'no';})()";
+
+/// Ubah HTML menjadi data: URL (tanpa dependensi tambahan).
+fn data_url(html: &str) -> String {
+    let mut out = String::from("data:text/html;charset=utf-8,");
+    for b in html.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 /// Hanya web.whatsapp.com yang boleh dimuat di jendela ini.
@@ -77,6 +97,7 @@ fn allowed(url: &str) -> bool {
         || url.starts_with("blob:https://web.whatsapp.com")
         || url.starts_with("about:")
         || url.starts_with("data:")
+        || url.starts_with("chrome-error:")
 }
 
 /// Tautan lain dibuka di browser bawaan sistem.
@@ -199,9 +220,18 @@ fn main() {
     };
     let mut context = WebContext::new(Some(dir));
 
-    // Jika offline saat dibuka: tampilkan halaman offline, lalu otomatis
-    // pindah ke WhatsApp Web begitu koneksi kembali.
+    // Jika offline saat dibuka: tetap coba muat WhatsApp Web dari cache/data lokalnya.
+    // Bila setelah beberapa detik tidak tampil, pakai halaman offline. Saat koneksi
+    // kembali, otomatis pindah/segarkan ke WhatsApp Web online.
     let online_at_start = is_online();
+    if !online_at_start {
+        let p = proxy.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_secs(8));
+            let _ = p.send_event(UserEvent::CheckCache);
+        });
+    }
+    let proxy_cb = proxy.clone();
     spawn_monitor(proxy, online_at_start);
 
     // wry 0.44: di Linux builder dibuat dari GTK vbox (Wayland + X11).
@@ -233,11 +263,7 @@ fn main() {
         })
         .with_devtools(false);
 
-    let builder = if online_at_start {
-        builder.with_url(HOME)
-    } else {
-        builder.with_html(OFFLINE_HTML)
-    };
+    let builder = builder.with_url(HOME);
 
     #[cfg(target_os = "linux")]
     let builder = builder
@@ -264,7 +290,8 @@ fn main() {
     };
 
     let webview = builder.build().expect("gagal membuat webview");
-    let mut on_offline_page = !online_at_start;
+    let mut on_offline_page = false;
+    let mut online_now = online_at_start;
 
     event_loop.run(move |event, _, control_flow| {
         let _keep_alive = (&context, &window);
@@ -274,7 +301,26 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
+            Event::UserEvent(UserEvent::CheckCache) => {
+                if !online_now && !on_offline_page {
+                    let p = proxy_cb.clone();
+                    let _ = webview.evaluate_script_with_callback(CACHE_CHECK_JS, move |res: String| {
+                        if res.contains("ok") {
+                            return; // WhatsApp tampil dari cache; spanduk ditambah di bawah
+                        }
+                        let _ = p.send_event(UserEvent::ShowOfflinePage);
+                    });
+                    let _ = webview.evaluate_script(OFFLINE_BANNER_JS);
+                }
+            }
+            Event::UserEvent(UserEvent::ShowOfflinePage) => {
+                if !online_now {
+                    on_offline_page = true;
+                    let _ = webview.load_url(&data_url(OFFLINE_HTML));
+                }
+            }
             Event::UserEvent(UserEvent::Online) => {
+                online_now = true;
                 if on_offline_page {
                     on_offline_page = false;
                     let _ = webview.load_url(HOME);
@@ -284,6 +330,7 @@ fn main() {
                 }
             }
             Event::UserEvent(UserEvent::Offline) => {
+                online_now = false;
                 // Tampilan WhatsApp terakhir tetap dipertahankan + spanduk kecil.
                 if !on_offline_page {
                     let _ = webview.evaluate_script(OFFLINE_BANNER_JS);
