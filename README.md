@@ -6,10 +6,11 @@ Linux memakai WebKitGTK, Windows memakai WebView2. Versi library dikunci: wry 0.
 ## Fitur
 - Ringan: tanpa Chromium sendiri, CPU idle mendekati 0%.
 - Sesi login tersimpan (tidak perlu scan QR berulang).
-- **Mode offline:** jika dibuka tanpa internet, tampil halaman offline lalu otomatis
-  pindah ke WhatsApp Web saat koneksi kembali. Jika putus saat dipakai, tampilan terakhir
-  dipertahankan dengan spanduk kecil, lalu halaman disegarkan otomatis saat online lagi.
-  (Pesan tetap tidak bisa dikirim/diterima selama offline.)
+- **Mode offline:** jika dibuka tanpa internet, aplikasi tetap mencoba memuat WhatsApp Web
+  dari cache/data lokalnya sendiri (chat lama mungkin tampil read-only, tergantung WhatsApp).
+  Jika setelah ~8 detik tidak tampil, muncul halaman offline. Saat koneksi kembali, otomatis
+  pindah/segarkan ke WhatsApp Web online. Jika putus saat dipakai, tampilan terakhir
+  dipertahankan dengan spanduk kecil. Pesan tetap tidak bisa dikirim/diterima selama offline.
 - Ikon aplikasi kustom (jendela, `.exe`, launcher Linux).
 - **Notifikasi desktop** (lihat catatan per OS di bawah).
 - Tautan di luar web.whatsapp.com dibuka di browser bawaan sistem.
