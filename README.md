@@ -1,58 +1,66 @@
 # wa-lite
 
-WhatsApp Web dalam jendela native yang ringan (Rust + wry). Terkunci ke `web.whatsapp.com`.
-Di Linux memakai WebKitGTK, di Windows memakai WebView2.
+WhatsApp Web dalam jendela native yang ringan (Rust + wry), terkunci ke `web.whatsapp.com`.
+Linux memakai WebKitGTK, Windows memakai WebView2. Versi library dikunci: wry 0.44.1 + tao 0.30.0.
 
-> Catatan: dikunci ke wry 0.44.1 + tao 0.30.0 (API-nya berbeda dari versi terbaru).
+## Fitur
+- Ringan: tanpa Chromium sendiri, CPU idle mendekati 0%.
+- Sesi login tersimpan (tidak perlu scan QR berulang).
+- **Mode offline:** jika dibuka tanpa internet, tampil halaman offline lalu otomatis
+  pindah ke WhatsApp Web saat koneksi kembali. Jika putus saat dipakai, tampilan terakhir
+  dipertahankan dengan spanduk kecil, lalu halaman disegarkan otomatis saat online lagi.
+  (Pesan tetap tidak bisa dikirim/diterima selama offline.)
+- Ikon aplikasi kustom (jendela, `.exe`, launcher Linux).
+- **Notifikasi desktop** (lihat catatan per OS di bawah).
+- Tautan di luar web.whatsapp.com dibuka di browser bawaan sistem.
 
-## Instalasi di Arch Linux (CLI)
+## Arch Linux (CLI)
 
-### 1. Pasang dependensi
+1. Dependensi:
 
-    sudo pacman -S --needed rust base-devel pkgconf gtk3 webkit2gtk-4.1 xdg-utils
+       sudo pacman -S --needed rust base-devel pkgconf gtk3 webkit2gtk-4.1 xdg-utils libnotify
 
-(Boleh pakai `rustup` sebagai ganti paket `rust`: `sudo pacman -S rustup && rustup default stable`.)
+   Notifikasi tampil lewat `notify-send` (paket `libnotify`) dan butuh notification daemon.
+   GNOME dan KDE sudah punya; di window manager lain pasang `dunst` atau `mako`.
 
-### 2. Ekstrak dan build
+2. Build:
 
-    unzip wa-lite.zip
-    cd wa-lite
-    cargo build --release
+       unzip -o wa-lite.zip && cd wa-lite
+       cargo build --release
 
-Build pertama mengunduh crate dan cukup lama. Hasilnya: `target/release/wa-lite`.
+3. Pasang:
 
-### 3. Pasang ke sistem (per-user)
+       install -Dm755 target/release/wa-lite ~/.local/bin/wa-lite
+       install -Dm644 wa-lite.desktop ~/.local/share/applications/wa-lite.desktop
+       install -Dm644 assets/icon.png ~/.local/share/icons/hicolor/256x256/apps/wa-lite.png
 
-    install -Dm755 target/release/wa-lite ~/.local/bin/wa-lite
-    install -Dm644 wa-lite.desktop ~/.local/share/applications/wa-lite.desktop
+   Pastikan `~/.local/bin` ada di `PATH`. Jalankan `wa-lite` atau cari "WhatsApp (wa-lite)" di launcher.
 
-Pastikan `~/.local/bin` ada di `PATH`. Jalankan dengan `wa-lite` dari terminal,
-atau cari "WhatsApp (wa-lite)" di launcher aplikasi.
+4. Notifikasi: izin otomatis diberikan. Setelah login, di WhatsApp buka
+   Pengaturan -> Notifikasi dan pastikan aktif.
 
-### 4. Pertama kali dipakai
+Data sesi: `~/.local/share/wa-lite`. Reset login: hapus folder itu.
 
-Scan QR dari HP (Perangkat tertaut). Sesi disimpan di `~/.local/share/wa-lite`,
-jadi tidak perlu scan ulang.
+## Windows 11 (VS Code)
+
+1. Pasang "Build Tools for Visual Studio" dengan workload **Desktop development with C++**
+   (sudah termasuk Windows SDK yang dibutuhkan untuk menyematkan ikon).
+2. Pasang Rust dari rustup.rs (toolchain MSVC). Pasang ekstensi **rust-analyzer** di VS Code.
+3. Buka folder `wa-lite` di VS Code, lalu di terminal:
+
+       cargo build --release
+
+4. Hasil: `target\release\wa-lite.exe` (sudah ber-ikon). WebView2 Runtime sudah bawaan Windows 11.
+
+Notifikasi di Windows memakai fitur notifikasi bawaan WebView2: klik **Izinkan** pada
+permintaan izin notifikasi yang muncul sekali, dan pastikan notifikasi Windows / Fokus tidak
+sedang memblokir. Data sesi: `%LOCALAPPDATA%\wa-lite`.
 
 ## Pemecahan masalah
-
-- **Layar putih/hitam atau crash di Wayland/NVIDIA:** coba
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1 wa-lite`. Jika berhasil, tambahkan ke baris `Exec=`
-  di file `.desktop` menjadi `Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 wa-lite`.
-- **Error `webkit2gtk-4.1` tidak ditemukan saat build:** pastikan paket `webkit2gtk-4.1`
-  terpasang (bukan hanya `webkit2gtk`).
-- **WhatsApp bilang browser tidak didukung:** aplikasi sudah memakai User-Agent Chrome;
-  jika masih muncul, kabari agar versinya diperbarui.
-- **Reset login:** `rm -rf ~/.local/share/wa-lite`.
-- **Uninstall:** `rm ~/.local/bin/wa-lite ~/.local/share/applications/wa-lite.desktop`.
-
-## Catatan
-
-- Butuh internet; ini hanya pembungkus WhatsApp Web, bukan klien offline.
-- Tautan di luar `web.whatsapp.com` dibuka lewat `xdg-open`.
-- Tidak ada polling: CPU idle mendekati 0%.
-
-## Build di Windows
-
-Pasang Rust (MSVC) + WebView2 Runtime, lalu `cargo build --release`.
-Hasil: `target\release\wa-lite.exe`. Sesi disimpan di `%LOCALAPPDATA%\wa-lite`.
+- **Layar putih/crash di Wayland/NVIDIA:** `WEBKIT_DISABLE_DMABUF_RENDERER=1 wa-lite`
+  (permanen: ubah `Exec=` di `.desktop` menjadi `Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 wa-lite`).
+- **`webkit2gtk-4.1` tidak ditemukan:** pastikan paket `webkit2gtk-4.1` terpasang.
+- **Windows: gagal menyematkan ikon (`rc.exe`):** pasang Windows SDK lewat Build Tools,
+  atau hapus `build.rs` dan bagian `[target.'cfg(windows)'.build-dependencies]` di `Cargo.toml`
+  (ikon jendela tetap tampil, hanya ikon file `.exe` yang default).
+- **Uninstall (Linux):** `rm ~/.local/bin/wa-lite ~/.local/share/applications/wa-lite.desktop ~/.local/share/icons/hicolor/256x256/apps/wa-lite.png`

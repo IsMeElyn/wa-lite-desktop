@@ -7,6 +7,10 @@ edition = "2021"
 wry = "=0.44.1"
 tao = "=0.30.0"
 
+# Menyematkan ikon ke wa-lite.exe (hanya saat build di Windows).
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
 [profile.release]
 opt-level = "z"     # ukuran biner kecil
 lto = true
