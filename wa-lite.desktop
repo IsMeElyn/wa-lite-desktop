@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WhatsApp (wa-lite)
+Comment=WhatsApp Web ringan
+Exec=wa-lite
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=wa-lite
